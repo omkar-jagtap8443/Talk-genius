@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}TalkGenius - AI-Powered Speech Practice{% endblock %}
+
+{% block content %}
+<div class="landing-container">
+    <div class="hero-section">
+        <div class="hero-content">
+            <h1 class="hero-title">Master Your Presentation Skills with AI</h1>
+            <p class="hero-subtitle">
+                Practice Mirror provides real-time feedback on your posture, eye contact, 
+                and speech delivery using advanced AI analysis.
+            </p>
+            
+            <div class="hero-features">
+                <div class="feature-card">
+                    <i class="fas fa-video"></i>
+                    <h3>Real-time Posture Analysis</h3>
+                    <p>Get instant feedback on your body language and posture</p>
+                </div>
+                
+                <div class="feature-card">
+                    <i class="fas fa-eye"></i>
+                    <h3>Eye Contact Tracking</h3>
+                    <p>Monitor and improve your eye contact with the audience</p>
+                </div>
+                
+                <div class="feature-card">
+                    <i class="fas fa-comments"></i>
+                    <h3>Speech Analysis</h3>
+                    <p>Analyze filler words, pace, grammar, and clarity</p>
+                </div>
+                
+                <div class="feature-card">
+                    <i class="fas fa-brain"></i>
+                    <h3>AI-Powered Feedback</h3>
+                    <p>Personalized suggestions from Gemini AI</p>
+                </div>
+            </div>
+            
+            <div class="cta-buttons">
+                <a href="{{ url_for('practice') }}" class="btn btn-primary btn-large">
+                    <i class="fas fa-rocket"></i>
+                    Start Practicing
+                </a>
+                <a href="{{ url_for('analysis') }}" class="btn btn-secondary btn-large">
+                    <i class="fas fa-chart-bar"></i>
+                    View Analysis
+                </a>
+            </div>
+        </div>
+        
+        <div class="hero-visual">
+            <div class="demo-preview">
+                <div class="camera-preview"></div>
+                <div class="metrics-overlay">
+                    <div class="metric good">Posture: 85%</div>
+                    <div class="metric good">Eye Contact: 78%</div>
+                    <div class="metric average">Pace: 145 WPM</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- How It Works Section -->
+    <section class="how-it-works">
+        <h2>How It Works</h2>
+        <div class="steps-container">
+            <div class="step">
+                <div class="step-number">1</div>
+                <h3>Choose Your Topic</h3>
+                <p>Select from predefined topics or upload your PPT/PDF</p>
+            </div>
+            
+            <div class="step">
+                <div class="step-number">2</div>
+                <h3>Practice Speaking</h3>
+                <p>Record your presentation with real-time feedback</p>
+            </div>
+            
+            <div class="step">
+                <div class="step-number">3</div>
+                <h3>Get AI Analysis</h3>
+                <p>Receive comprehensive feedback on your performance</p>
+            </div>
+            
+            <div class="step">
+                <div class="step-number">4</div>
+                <h3>Improve</h3>
+                <p>Use personalized exercises to enhance your skills</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Recent Sessions -->
+    <section class="recent-sessions">
+        <h2>Your Practice History</h2>
+        <div id="sessionHistory" class="sessions-grid">
+            <!-- Dynamically loaded sessions will appear here -->
+        </div>
+    </section>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Load session history
+    loadSessionHistory();
+    
+    async function loadSessionHistory() {
+        try {
+            const response = await fetch('/session_history');
+            const data = await response.json();
+            
+            if (data.success && data.sessions.length > 0) {
+                displaySessions(data.sessions.slice(0, 3)); // Show latest 3
+            } else {
+                document.getElementById('sessionHistory').innerHTML = 
+                    '<p class="no-sessions">No practice sessions yet. Start your first practice!</p>';
+            }
+        } catch (error) {
+            console.error('Error loading session history:', error);
+        }
+    }
+    
+    function displaySessions(sessions) {
+        const container = document.getElementById('sessionHistory');
+        container.innerHTML = sessions.map(session => `
+            <div class="session-card">
+                <div class="session-topic">${session.topic || 'General Practice'}</div>
+                <div class="session-score score-${getScoreCategory(session.overall_score)}">
+                    ${session.overall_score}%
+                </div>
+                <div class="session-duration">${formatDuration(session.duration)}</div>
+                <div class="session-date">${formatDate(session.timestamp)}</div>
+                <a href="/analysis?session=${session.session_id}" class="btn btn-small">View Details</a>
+            </div>
+        `).join('');
+    }
+    
+    function getScoreCategory(score) {
+        if (score >= 80) return 'excellent';
+        if (score >= 60) return 'good';
+        return 'needs-work';
+    }
+    
+    function formatDuration(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+    
+    function formatDate(timestamp) {
+        return new Date(timestamp * 1000).toLocaleDateString();
+    }
+});
+</script>
+{% endblock %}

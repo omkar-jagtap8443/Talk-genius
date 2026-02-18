@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Practice Session - TalkGenius{% endblock %}
+
+{% block content %}
+<script>
+// Global error handler - show all errors
+window.addEventListener('error', function(event) {
+    console.error('🚨 GLOBAL ERROR:', event.message, 'at', event.filename, ':', event.lineno);
+    console.error('Stack:', event.error?.stack);
+});
+
+window.addEventListener('unhandledrejection', function(event) {
+    console.error('🚨 UNHANDLED PROMISE REJECTION:', event.reason);
+});
+
+console.log('✅ Error handlers installed');
+</script>
+<div class="practice-container">
+    <!-- Topic Selection Section -->
+    <div id="topicSection" class="section active">
+        <div class="section-header">
+            <h1>Choose Your Practice Topic</h1>
+            <p>Select a topic or upload your presentation to get started</p>
+        </div>
+
+        <div class="topic-options">
+            <!-- Predefined Topics -->
+            <div class="topics-grid">
+                <div class="topic-card" onclick="selectTopic('The future of artificial intelligence in education')">
+                    <div class="topic-icon">🤖</div>
+                    <h3>AI in Education</h3>
+                    <p>The future of artificial intelligence in education</p>
+                    <button class="select-btn">Select</button>
+                </div>
+                
+                <div class="topic-card" onclick="selectTopic('How to build effective remote work culture')">
+                    <div class="topic-icon">🏠</div>
+                    <h3>Remote Work Culture</h3>
+                    <p>How to build effective remote work culture</p>
+                    <button class="select-btn">Select</button>
+                </div>
+                
+                <div class="topic-card" onclick="selectTopic('The importance of sustainable living in modern cities')">
+                    <div class="topic-icon">🌱</div>
+                    <h3>Sustainable Living</h3>
+                    <p>The importance of sustainable living in modern cities</p>
+                    <button class="select-btn">Select</button>
+                </div>
+            </div>
+
+            <!-- Custom Topic Input -->
+            <div class="custom-topic-section">
+                <h3>Or Create Your Own Topic</h3>
+                <div class="input-group">
+                    <input type="text" id="customTopicInput" placeholder="Enter your presentation topic...">
+                    <button onclick="useCustomTopic()" class="btn btn-primary">Use This Topic</button>
+                </div>
+            </div>
+
+            <!-- File Upload -->
+            <div class="file-upload-section">
+                <h3>Upload Presentation (PPT/PDF)</h3>
+                <div class="upload-area" id="uploadArea">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>Drag & drop your PPT or PDF file here</p>
+                    <span>or</span>
+                    <input type="file" id="fileInput" accept=".pdf,.ppt,.pptx" hidden>
+                    <button onclick="document.getElementById('fileInput').click()" class="btn btn-secondary">
+                        Choose File
+                    </button>
+                    <div id="fileInfo" class="file-info" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recording Section -->
+    <div id="recordingSection" class="section" style="display: none;">
+        <div class="section-header">
+            <h1 id="currentTopic">Practice Session</h1>
+            <div class="session-info">
+                <span id="sessionTimer">00:00</span>
+                <span id="recordingStatus" class="status-not-recording">Not Recording</span>
+            </div>
+        </div>
+
+        <div class="recording-interface">
+            <!-- Camera Preview - BIG AND PROMINENT -->
+            <div class="camera-container">
+                <video id="cameraPreview" autoplay muted playsinline></video>
+                <canvas id="overlayCanvas"></canvas>
+                
+                <!-- Recording Controls -->
+                <div class="recording-controls">
+                    <button id="startRecordingBtn" class="btn btn-record" onclick="startRecording()" title="Start Recording">
+                        <i class="fas fa-circle"></i>
+                        <span>Start</span>
+                    </button>
+                    <button id="stopRecordingBtn" class="btn btn-stop" onclick="stopRecording()" disabled title="Stop Recording">
+                        <i class="fas fa-square"></i>
+                        <span>Stop</span>
+                    </button>
+                    <button class="btn btn-secondary" onclick="goBackToTopics()" title="Go Back">
+                        <i class="fas fa-arrow-left"></i>
+                        <span>Back</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Real-time Feedback Panel -->
+            <div class="feedback-panel">
+                <h3>📊 Live Feedback</h3>
+                
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <i class="fas fa-user-tie"></i>
+                            <span>Posture</span>
+                        </div>
+                        <div id="postureScore" class="metric-value">--%</div>
+                        <div id="postureFeedback" class="metric-feedback">Ready to analyze...</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <i class="fas fa-eye"></i>
+                            <span>Eye Contact</span>
+                        </div>
+                        <div id="eyeContactScore" class="metric-value">--%</div>
+                        <div id="eyeContactFeedback" class="metric-feedback">Ready to analyze...</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <i class="fas fa-wave-square"></i>
+                            <span>Speaking Pace</span>
+                        </div>
+                        <div id="paceValue" class="metric-value">-- WPM</div>
+                        <div id="paceFeedback" class="metric-feedback">Ready to analyze...</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <i class="fas fa-comment-dots"></i>
+                            <span>Filler Words</span>
+                        </div>
+                        <div id="fillerCount" class="metric-value">0</div>
+                        <div id="fillerFeedback" class="metric-feedback">No filler words detected</div>
+                    </div>
+                </div>
+
+                <!-- Live Suggestions -->
+                <div class="suggestions-panel">
+                    <h4>💡 AI Suggestions</h4>
+                    <div id="liveSuggestions" class="suggestions-list">
+                        <div class="suggestion-item">
+                            🎤 Start speaking to get real-time feedback...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Transcript -->
+                <div class="transcript-panel">
+                    <h4>📝 Live Transcript</h4>
+                    <div id="liveTranscript" class="transcript-content">
+                        Your speech will appear here as you speak...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processing Section -->
+    <div id="processingSection" class="section" style="display: none;">
+        <div class="processing-content">
+            <div class="loading-spinner"></div>
+            <h2>Analyzing Your Performance</h2>
+            <p>We're processing your video, audio, and analyzing your delivery...</p>
+            
+            <div class="progress-steps">
+                <div class="progress-step active">
+                    <i class="fas fa-video"></i>
+                    <span>Processing Video</span>
+                </div>
+                <div class="progress-step">
+                    <i class="fas fa-microphone"></i>
+                    <span>Analyzing Speech</span>
+                </div>
+                <div class="progress-step">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Generating Feedback</span>
+                </div>
+                <div class="progress-step">
+                    <i class="fas fa-robot"></i>
+                    <span>AI Analysis</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MediaPipe and Recording Scripts -->
+<script src="{{ url_for('static', filename='js/mediapipe-setup.js') }}"></script>
+<script src="{{ url_for('static', filename='js/speech-recognition.js') }}"></script>
+<script src="{{ url_for('static', filename='js/practise.js') }}"></script>
+{% endblock %}

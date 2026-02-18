@@ -1,0 +1,716 @@
+{% extends "base.html" %}
+
+{% block title %}Performance Analysis - TalkGenius{% endblock %}
+
+{% block content %}
+<div class="analysis-container">
+    <div class="analysis-header">
+        <h1>Your Performance Analysis</h1>
+        <div class="header-actions">
+            <!-- FIXED: Using data attribute instead of onclick with url_for -->
+            <button class="btn btn-primary" data-url="{{ url_for('practice') }}">
+                <i class="fas fa-redo"></i>
+                Practice Again
+            </button>
+            <button onclick="downloadReport()" class="btn btn-secondary">
+                <i class="fas fa-download"></i>
+                Download Report
+            </button>
+        </div>
+    </div>
+
+    <!-- Overall Score Card -->
+    <div class="overall-score-card">
+        <div class="score-circle">
+            <div class="score-value" id="overallScore">--</div>
+            <div class="score-label">Overall Score</div>
+        </div>
+        <div class="score-breakdown">
+            <div class="breakdown-item">
+                <span class="breakdown-label">Posture</span>
+                <div class="breakdown-bar">
+                    <div class="breakdown-fill" id="postureBreakdown" style="width: 0%"></div>
+                </div>
+                <span class="breakdown-value" id="postureValue">--%</span>
+            </div>
+            <div class="breakdown-item">
+                <span class="breakdown-label">Eye Contact</span>
+                <div class="breakdown-bar">
+                    <div class="breakdown-fill" id="eyeContactBreakdown" style="width: 0%"></div>
+                </div>
+                <span class="breakdown-value" id="eyeContactValue">--%</span>
+            </div>
+            <div class="breakdown-item">
+                <span class="breakdown-label">Speech</span>
+                <div class="breakdown-bar">
+                    <div class="breakdown-fill" id="speechBreakdown" style="width: 0%"></div>
+                </div>
+                <span class="breakdown-value" id="speechValue">--%</span>
+            </div>
+            <div class="breakdown-item">
+                <span class="breakdown-label">Content</span>
+                <div class="breakdown-bar">
+                    <div class="breakdown-fill" id="contentBreakdown" style="width: 0%"></div>
+                </div>
+                <span class="breakdown-value" id="contentValue">--%</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="analysis-content">
+        <!-- Left Column: Video and Transcript -->
+        <div class="left-column">
+            <!-- Video Player -->
+            <div class="video-section">
+                <h3>Recording Playback</h3>
+                <div class="video-container">
+                    <video id="playbackVideo" controls>
+                        <source id="videoSource" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+            </div>
+
+            <!-- Transcript Section -->
+            <div class="transcript-section">
+                <h3>Speech Transcript</h3>
+                <div class="transcript-container">
+                    <div id="transcriptContent" class="transcript-text">
+                        Loading transcript...
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Feedback Section -->
+            <div class="ai-feedback-section">
+                <h3>AI-Powered Feedback</h3>
+                <div id="aiFeedback" class="ai-feedback-content">
+                    <div class="loading">Generating AI feedback...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Detailed Analysis -->
+        <div class="right-column">
+            <!-- Posture Analysis -->
+            <div class="analysis-card">
+                <h3>📊 Posture Analysis</h3>
+                <div class="metric-grid">
+                    <div class="metric-item">
+                        <div class="metric-value" id="postureScore">--%</div>
+                        <div class="metric-label">Average Posture</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value" id="goodPostureTime">--%</div>
+                        <div class="metric-label">Good Posture</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value" id="eyeContactScore">--%</div>
+                        <div class="metric-label">Eye Contact</div>
+                    </div>
+                </div>
+                <div class="timeline-container">
+                    <h4>Posture Timeline</h4>
+                    <div id="postureTimeline" class="timeline"></div>
+                </div>
+            </div>
+
+            <!-- Speech Analysis -->
+            <div class="analysis-card">
+                <h3>🎯 Speech Analysis</h3>
+                <div class="metric-grid">
+                    <div class="metric-item">
+                        <div class="metric-value" id="wordsPerMinute">--</div>
+                        <div class="metric-label">Words/Minute</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value" id="fillerWords">--</div>
+                        <div class="metric-label">Filler Words</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value" id="pauseCount">--</div>
+                        <div class="metric-label">Pauses</div>
+                    </div>
+                </div>
+                
+                <!-- Filler Words Breakdown -->
+                <div class="breakdown-section">
+                    <h4>Filler Words Used</h4>
+                    <div id="fillerWordsBreakdown" class="tags-container"></div>
+                </div>
+
+                <!-- Pause Analysis -->
+                <div class="breakdown-section">
+                    <h4>Pause Analysis</h4>
+                    <div id="pauseAnalysis" class="pause-list"></div>
+                </div>
+            </div>
+
+            <!-- Grammar and Repetition -->
+            <div class="analysis-card">
+                <h3>📝 Language Analysis</h3>
+                <div class="metric-grid">
+                    <div class="metric-item">
+                        <div class="metric-value" id="grammarErrors">--</div>
+                        <div class="metric-label">Grammar Issues</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value" id="uniqueWords">--</div>
+                        <div class="metric-label">Unique Words</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value" id="wordCount">--</div>
+                        <div class="metric-label">Total Words</div>
+                    </div>
+                </div>
+
+                <!-- Repeated Words -->
+                <div class="breakdown-section">
+                    <h4>Repeated Words</h4>
+                    <div id="repeatedWords" class="tags-container"></div>
+                </div>
+
+                <!-- Key Topics -->
+                <div class="breakdown-section">
+                    <h4>Key Topics Mentioned</h4>
+                    <div id="keyTopics" class="tags-container"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Second-by-Second Breakdown -->
+    <div class="detailed-breakdown">
+        <h3>Second-by-Second Performance</h3>
+        <div class="breakdown-table-container">
+            <table id="secondBySecondTable" class="breakdown-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Posture</th>
+                        <th>Eye Contact</th>
+                        <th>Speaking Pace</th>
+                        <th>Filler Words</th>
+                    </tr>
+                </thead>
+                <tbody id="breakdownTableBody">
+                    <!-- Dynamically populated -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/playback.js') }}"></script>
+
+<script>
+// Load analysis data when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadAnalysisData();
+    
+    // Add event listener for practice button
+    document.querySelector('button[data-url]').addEventListener('click', function() {
+        window.location.href = this.getAttribute('data-url');
+    });
+});
+
+async function loadAnalysisData() {
+    try {
+        // Load combined report
+        const reportResponse = await fetch('/report');
+        if (!reportResponse.ok) {
+            throw new Error(`Report fetch failed: ${reportResponse.status}`);
+        }
+        const reportData = await reportResponse.json();
+        
+        // Load transcript
+        const transcriptResponse = await fetch('/transcript');
+        if (!transcriptResponse.ok) {
+            throw new Error(`Transcript fetch failed: ${transcriptResponse.status}`);
+        }
+        const transcriptData = await transcriptResponse.json();
+        
+        // Load speech analysis
+        const analysisResponse = await fetch('/analysis_data');
+        if (!analysisResponse.ok) {
+            throw new Error(`Analysis fetch failed: ${analysisResponse.status}`);
+        }
+        const analysisData = await analysisResponse.json();
+        
+        // Load AI feedback
+        const aiResponse = await fetch('/llm_feedback');
+        if (!aiResponse.ok) {
+            throw new Error(`AI feedback fetch failed: ${aiResponse.status}`);
+        }
+        const aiData = await aiResponse.json();
+        
+        // Update UI with all data
+        updateAnalysisUI(reportData, transcriptData, analysisData, aiData);
+        
+    } catch (error) {
+        console.error('Error loading analysis data:', error);
+        showError('No analysis data found. Please complete a practice session first by clicking "Start New Practice".');
+    }
+}
+
+function updateAnalysisUI(reportData, transcriptData, analysisData, aiData) {
+    // Update overall scores
+    updateOverallScores(reportData);
+    
+    // Update posture analysis
+    updatePostureAnalysis(reportData);
+    
+    // Update speech analysis
+    updateSpeechAnalysis(analysisData);
+    
+    // Update transcript
+    updateTranscript(transcriptData);
+    
+    // Update AI feedback
+    updateAIFeedback(aiData);
+    
+    // Update detailed breakdown
+    updateDetailedBreakdown(reportData);
+}
+
+function updateOverallScores(data) {
+    const overallScore = data.overall_score?.total || 0;
+    const breakdown = data.overall_score?.breakdown || {};
+    
+    document.getElementById('overallScore').textContent = Math.round(overallScore);
+    document.getElementById('postureValue').textContent = Math.round(breakdown.posture || 0) + '%';
+    document.getElementById('eyeContactValue').textContent = Math.round(breakdown.eye_contact || 0) + '%';
+    document.getElementById('speechValue').textContent = Math.round(breakdown.speech || 0) + '%';
+    document.getElementById('contentValue').textContent = Math.round(breakdown.content || 0) + '%';
+    
+    // Update progress bars
+    document.getElementById('postureBreakdown').style.width = (breakdown.posture || 0) + '%';
+    document.getElementById('eyeContactBreakdown').style.width = (breakdown.eye_contact || 0) + '%';
+    document.getElementById('speechBreakdown').style.width = (breakdown.speech || 0) + '%';
+    document.getElementById('contentBreakdown').style.width = (breakdown.content || 0) + '%';
+    
+    // Update score color
+    const scoreElement = document.getElementById('overallScore');
+    scoreElement.className = `score-value ${getScoreCategory(overallScore)}`;
+}
+
+function updatePostureAnalysis(data) {
+    const posture = data.posture_analysis?.summary || {};
+    
+    document.getElementById('postureScore').textContent = Math.round(posture.average_posture_score || 0) + '%';
+    document.getElementById('goodPostureTime').textContent = (posture.posture_breakdown?.good_percentage || 0) + '%';
+    document.getElementById('eyeContactScore').textContent = Math.round(posture.average_eye_contact_score || 0) + '%';
+    
+    // Update score colors
+    document.getElementById('postureScore').className = `metric-value ${getScoreCategory(posture.average_posture_score || 0)}`;
+    document.getElementById('eyeContactScore').className = `metric-value ${getScoreCategory(posture.average_eye_contact_score || 0)}`;
+    
+    // Update posture timeline
+    updatePostureTimeline(data.posture_analysis);
+}
+
+function updateSpeechAnalysis(data) {
+    const wpm = data.words_per_minute || 0;
+    const fillerCount = data.filler_words?.total_count || 0;
+    
+    document.getElementById('wordsPerMinute').textContent = wpm;
+    document.getElementById('fillerWords').textContent = fillerCount;
+    document.getElementById('pauseCount').textContent = data.pauses?.count || 0;
+    document.getElementById('grammarErrors').textContent = data.grammar_errors?.count || 0;
+    document.getElementById('uniqueWords').textContent = data.unique_words || '--';
+    document.getElementById('wordCount').textContent = data.word_count || '--';
+    
+    // Update score colors
+    document.getElementById('wordsPerMinute').className = `metric-value ${getWpmCategory(wpm)}`;
+    document.getElementById('fillerWords').className = `metric-value ${getFillerCategory(fillerCount)}`;
+    
+    // Update filler words breakdown
+    updateFillerWordsBreakdown(data.filler_words);
+    
+    // Update repeated words
+    updateRepeatedWords(data.repetition);
+    
+    // Update key topics
+    updateKeyTopics(data);
+}
+
+function updateTranscript(data) {
+    const transcript = extractTranscriptText(data);
+    document.getElementById('transcriptContent').textContent = transcript || 'No transcript available.';
+}
+
+function updateAIFeedback(data) {
+    const container = document.getElementById('aiFeedback');
+    
+    if (!data || data.error) {
+        container.innerHTML = '<div class="error">AI feedback not available</div>';
+        return;
+    }
+    
+    let html = '';
+    
+    // Overall Assessment
+    if (data.overall_assessment) {
+        html += `
+            <div class="feedback-section">
+                <h4>📋 Overall Assessment</h4>
+                <div class="feedback-box overall">
+                    <p>${data.overall_assessment}</p>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Strengths
+    if (data.strengths && Array.isArray(data.strengths) && data.strengths.length > 0) {
+        html += `
+            <div class="feedback-section">
+                <h4> Strengths</h4>
+                <div class="feedback-box">
+                    <ul class="feedback-list">
+                        ${data.strengths.map(strength => `<li>✅ ${strength}</li>`).join('')}
+                    </ul>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Areas for Improvement
+    if (data.areas_for_improvement && Array.isArray(data.areas_for_improvement) && data.areas_for_improvement.length > 0) {
+        html += `
+            <div class="feedback-section">
+                <h4>🎯 Areas for Improvement</h4>
+                <div class="feedback-box improvement">
+                    <ul class="feedback-list">
+                        ${data.areas_for_improvement.map(area => `<li>💡 ${area}</li>`).join('')}
+                    </ul>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Delivery Tips
+    if (data.delivery_tips && Array.isArray(data.delivery_tips) && data.delivery_tips.length > 0) {
+        html += `
+            <div class="feedback-section">
+                <h4> Delivery Tips</h4>
+                <div class="feedback-box tips">
+                    <ul class="feedback-list">
+                        ${data.delivery_tips.map(tip => `<li>💬 ${tip}</li>`).join('')}
+                    </ul>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Personalized Exercises
+    if (data.personalized_exercises && Array.isArray(data.personalized_exercises) && data.personalized_exercises.length > 0) {
+        html += `
+            <div class="feedback-section">
+                <h4> Personalized Exercises</h4>
+                <div class="feedback-box exercises">
+                    <ul class="feedback-list">
+                        ${data.personalized_exercises.map((exercise, idx) => `<li>${idx + 1}. ${exercise}</li>`).join('')}
+                    </ul>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Topic Relevance
+    if (data.topic_relevance_feedback) {
+        html += `
+            <div class="feedback-section">
+                <h4>📚 Topic Relevance</h4>
+                <div class="feedback-box">
+                    <p>${data.topic_relevance_feedback}</p>
+                </div>
+            </div>
+        `;
+    }
+    
+
+    
+    // Next Steps
+    if (data.next_steps) {
+        html += `
+            <div class="feedback-section">
+                <h4>📌 Next Steps</h4>
+                <div class="feedback-box next-steps">
+                    <p>${data.next_steps}</p>
+                </div>
+            </div>
+        `;
+    }
+    
+    if (html) {
+        container.innerHTML = html;
+    } else {
+        container.innerHTML = '<div class="error">No AI feedback data available</div>';
+    }
+}
+
+function updatePostureTimeline(postureData) {
+    const timeline = document.getElementById('postureTimeline');
+    const secondBySecond = postureData?.second_by_second || {};
+    
+    if (Object.keys(secondBySecond).length === 0) {
+        timeline.innerHTML = '<div class="no-data">No posture data available</div>';
+        return;
+    }
+    
+    let timelineHTML = '';
+    const totalSeconds = Object.keys(secondBySecond).length;
+    
+    Object.keys(secondBySecond).forEach(second => {
+        const data = secondBySecond[second];
+        
+        // Calculate dominant posture from scores
+        let postureClass = 'unknown';
+        let postureScore = 0;
+        
+        if (data.posture_scores && data.posture_scores.length > 0) {
+            postureScore = Math.max(...data.posture_scores);
+            
+            if (postureScore >= 80) {
+                postureClass = 'good';
+            } else if (postureScore >= 60) {
+                postureClass = 'okay';
+            } else {
+                postureClass = 'bad';
+            }
+        }
+        
+        const width = 100 / totalSeconds;
+        
+        timelineHTML += `
+            <div class="timeline-segment ${postureClass}" 
+                 style="width: ${width}%"
+                 title="Second ${second}: ${postureScore.toFixed(0)}% - ${postureClass.charAt(0).toUpperCase() + postureClass.slice(1)} posture"
+                 data-score="${postureScore}">
+            </div>
+        `;
+    });
+    
+    timeline.innerHTML = timelineHTML;
+}
+
+function updateFillerWordsBreakdown(fillerData) {
+    const container = document.getElementById('fillerWordsBreakdown');
+    const breakdown = fillerData?.breakdown || {};
+    
+    if (Object.keys(breakdown).length === 0) {
+        container.innerHTML = '<span class="no-data">No filler words detected</span>';
+        return;
+    }
+    
+    let tagsHTML = '';
+    for (const [word, count] of Object.entries(breakdown)) {
+        tagsHTML += `<span class="tag">${word} <span class="count">${count}</span></span>`;
+    }
+    
+    container.innerHTML = tagsHTML;
+}
+
+function updateRepeatedWords(repetitionData) {
+    const container = document.getElementById('repeatedWords');
+    const repeatedWords = repetitionData?.repeated_words || {};
+    
+    if (Object.keys(repeatedWords).length === 0) {
+        container.innerHTML = '<span class="no-data">No significant repetition</span>';
+        return;
+    }
+    
+    let tagsHTML = '';
+    for (const [word, count] of Object.entries(repeatedWords)) {
+        if (count >= 2) { // Show words repeated 2+ times
+            tagsHTML += `<span class="tag">${word} <span class="count">${count}</span></span>`;
+        }
+    }
+    
+    container.innerHTML = tagsHTML || '<span class="no-data">No significant repetition</span>';
+}
+
+function updateKeyTopics(data) {
+    const container = document.getElementById('keyTopics');
+    const keywords = data.keywords || [];
+    
+    if (keywords.length === 0) {
+        container.innerHTML = '<span class="no-data">No key topics identified</span>';
+        return;
+    }
+    
+    let tagsHTML = '';
+    keywords.slice(0, 8).forEach(keyword => {
+        tagsHTML += `<span class="tag">${keyword}</span>`;
+    });
+    
+    container.innerHTML = tagsHTML;
+}
+
+function updateDetailedBreakdown(data) {
+    const tableBody = document.getElementById('breakdownTableBody');
+    const secondBySecond = data.posture_analysis?.second_by_second || {};
+    const speechAnalysis = data.speech_analysis || {};
+    
+    if (Object.keys(secondBySecond).length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="5" class="no-data">No detailed data available</td></tr>';
+        return;
+    }
+    
+    let tableHTML = '';
+    
+    // Sort seconds numerically
+    const sortedSeconds = Object.keys(secondBySecond)
+        .map(s => parseInt(s))
+        .sort((a, b) => a - b);
+    
+    sortedSeconds.forEach(second => {
+        const secondData = secondBySecond[second];
+        
+        // Calculate average posture score for this second
+        const postureScores = secondData.posture_scores || [];
+        const postureAvg = postureScores.length > 0 
+            ? Math.round(postureScores.reduce((a, b) => a + b, 0) / postureScores.length)
+            : 0;
+        
+        // Determine posture class
+        let postureClass = 'unknown';
+        let postureText = '--';
+        if (postureAvg > 0) {
+            if (postureAvg >= 80) {
+                postureClass = 'good';
+                postureText = postureAvg + '%';
+            } else if (postureAvg >= 60) {
+                postureClass = 'okay';
+                postureText = postureAvg + '%';
+            } else {
+                postureClass = 'bad';
+                postureText = postureAvg + '%';
+            }
+        }
+        
+        // Calculate average eye contact score for this second
+        const eyeContactScores = secondData.eye_contact_scores || [];
+        const eyeContactAvg = eyeContactScores.length > 0
+            ? Math.round(eyeContactScores.reduce((a, b) => a + b, 0) / eyeContactScores.length)
+            : 0;
+        
+        const eyeContactText = eyeContactAvg > 0 ? eyeContactAvg + '%' : '--';
+        
+        // Get speaking pace and filler words from speech analysis
+        const speakingPace = data.speech_analysis?.words_per_minute || '--';
+        const fillerWords = data.speech_analysis?.filler_words?.total_count || 0;
+        
+        tableHTML += `
+            <tr class="${postureClass}">
+                <td>${second}s</td>
+                <td class="${postureClass}">${postureText}</td>
+                <td>${eyeContactText}</td>
+                <td>${speakingPace}</td>
+                <td>${fillerWords}</td>
+            </tr>
+        `;
+    });
+    
+    tableBody.innerHTML = tableHTML;
+}
+
+// Helper functions
+function extractTranscriptText(transcriptData) {
+    try {
+        if (typeof transcriptData === 'string') {
+            return transcriptData;
+        }
+        return transcriptData.results?.channels?.[0]?.alternatives?.[0]?.transcript || 
+               transcriptData.transcript || 
+               '';
+    } catch (error) {
+        console.error('Error extracting transcript:', error);
+        return '';
+    }
+}
+
+function getPaceForSecond(second) {
+    // This would be implemented with actual pace data
+    // For now, return a placeholder
+    return '--';
+}
+
+function getFillerWordsForSecond(second) {
+    // This would be implemented with actual filler word timing data
+    // For now, return a placeholder
+    return '0';
+}
+
+function getScoreCategory(score) {
+    if (score >= 90) return 'excellent';
+    if (score >= 80) return 'very-good';
+    if (score >= 70) return 'good';
+    if (score >= 60) return 'average';
+    if (score >= 50) return 'needs-improvement';
+    return 'poor';
+}
+
+function getWpmCategory(wpm) {
+    if (wpm >= 140 && wpm <= 160) return 'excellent';
+    if (wpm >= 130 && wpm <= 170) return 'good';
+    if (wpm >= 120 && wpm <= 180) return 'average';
+    return 'needs-improvement';
+}
+
+function getFillerCategory(count) {
+    if (count === 0) return 'excellent';
+    if (count <= 3) return 'good';
+    if (count <= 8) return 'average';
+    return 'needs-improvement';
+}
+
+function downloadReport() {
+    // Simple PDF download implementation
+    const element = document.querySelector('.analysis-container');
+    const opt = {
+        margin: 1,
+        filename: 'talkgenius-analysis-report.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+    
+    // Check if html2pdf is available
+    if (typeof html2pdf !== 'undefined') {
+        html2pdf().from(element).set(opt).save();
+    } else {
+        alert('PDF download requires html2pdf library. For now, you can take a screenshot or use browser print (Ctrl+P).');
+    }
+}
+
+function showError(message) {
+    const container = document.querySelector('.analysis-container');
+    container.innerHTML = `
+        <div class="error-state">
+            <i class="fas fa-exclamation-triangle"></i>
+            <h2>Analysis Unavailable</h2>
+            <p>${message}</p>
+            <button class="btn btn-primary" data-url="{{ url_for('practice') }}">
+                Start New Practice
+            </button>
+        </div>
+    `;
+}
+
+// Initialize video source
+document.addEventListener('DOMContentLoaded', function() {
+    const videoElement = document.getElementById('playbackVideo');
+    const sourceElement = document.getElementById('videoSource');
+    
+    // Set video source with cache busting
+    sourceElement.src = '/video?t=' + new Date().getTime();
+    videoElement.load();
+});
+</script>
+
+<!-- Add html2pdf library for PDF download -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+{% endblock %}

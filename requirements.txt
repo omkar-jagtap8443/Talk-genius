@@ -1,0 +1,44 @@
+# Build tools (add these first)
+setuptools>=69.0.0
+wheel>=0.43.0
+
+# Core Framework
+flask==2.3.3
+flask-cors==4.0.0
+python-dotenv==1.0.0
+
+# Video & Audio Processing
+opencv-python==4.8.1.78
+mediapipe==0.10.21
+ffmpeg-python==0.2.0
+pydub==0.25.1
+speechrecognition==3.10.0
+
+# AI & ML Services
+google-generativeai==0.3.0
+requests==2.31.0
+transformers==4.30.2
+torch>=2.1.0
+sentence-transformers==2.2.2
+
+# Text Processing
+nltk==3.8.1
+language-tool-python==2.7.1
+textstat==0.7.3
+markdown==3.5.2
+
+# File Processing
+python-docx==1.1.0
+PyPDF2==3.0.1
+pdfplumber==0.10.3
+
+# Data Processing
+numpy>=1.26.0
+pandas>=2.1.0
+matplotlib>=3.7.0
+seaborn>=0.13.0
+
+# Utilities
+python-multipart==0.0.6
+
+# Note: 'uuid' is part of Python standard library - remove it from requirements
