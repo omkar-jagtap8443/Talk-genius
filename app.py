@@ -347,7 +347,7 @@ def serve_video(session_id):
 def serve_latest_video():
     """Serve latest recorded video (for playback page)"""
     try:
-        videos = os.listdir(app.config['VIDEOS_FOLDER'])
+        videos = [f for f in os.listdir(app.config['VIDEOS_FOLDER']) if f.endswith('.mp4')]
         if not videos:
             return jsonify({'error': 'No videos found'}), 404
         

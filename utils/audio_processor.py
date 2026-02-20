@@ -1,6 +1,6 @@
 # utils/audio_processor.py
 import os
-import ffmpeg
+import subprocess
 import numpy as np
 import logging
 from typing import Dict, List, Optional
@@ -21,20 +21,18 @@ class AudioProcessor:
             
             logger.info(f"Extracting audio: {video_path} -> {output_path}")
             
-            (
-                ffmpeg
-                .input(video_path)
-                .output(output_path, acodec='pcm_s16le', ar='16000', ac=1)
-                .overwrite_output()
-                .run(quiet=True)
-            )
+            cmd = [
+                'ffmpeg', '-i', video_path,
+                '-acodec', 'pcm_s16le',
+                '-ar', '16000',
+                '-ac', '1',
+                '-y', output_path
+            ]
+            subprocess.run(cmd, check=True, capture_output=True)
             
             logger.info(f"Audio extracted successfully: {output_path}")
             return output_path
             
-        except ffmpeg.Error as e:
-            logger.error(f"FFmpeg audio extraction error: {e.stderr.decode()}")
-            raise Exception(f"Audio extraction failed: {e.stderr.decode()}")
         except Exception as e:
             logger.error(f"Audio extraction error: {str(e)}")
             raise
