@@ -17,8 +17,13 @@ class SpeechAnalyzer:
             nltk.download('punkt_tab')
         
         # Initialize LanguageTool for grammar checking
-        # self.language_tool = language_tool_python.LanguageTool('en-US')  # Commented out
-        self.language_tool = None
+        try:
+            import language_tool_python
+            self.language_tool = language_tool_python.LanguageTool('en-US')
+            logger.info("LanguageTool initialized successfully")
+        except Exception as e:
+            logger.warning(f"LanguageTool not available: {e}")
+            self.language_tool = None
         
         # Enhanced filler words list
         self.filler_words = [
@@ -247,17 +252,28 @@ class SpeechAnalyzer:
         return sequences
     
     def _analyze_grammar(self, text: str) -> Dict:
-        """Simple grammar analysis without LanguageTool"""
-        # Basic grammar checks without LanguageTool
+        """Analyze grammar using LanguageTool or basic checks"""
         errors = []
         
-        # Check for basic issues
-        sentences = text.split('.')
-        for i, sentence in enumerate(sentences):
-            sentence = sentence.strip()
-            if sentence:
-                # Check if sentence starts with capital letter
-                if not sentence[0].isupper():
+        if self.language_tool:
+            try:
+                matches = self.language_tool.check(text)
+                for match in matches:
+                    errors.append({
+                        'error': match.message,
+                        'context': match.context,
+                        'offset': match.offset,
+                        'suggestions': match.replacements[:3],
+                        'category': match.category
+                    })
+            except Exception as e:
+                logger.error(f"Grammar check error: {e}")
+        else:
+            # Basic grammar checks
+            sentences = text.split('.')
+            for sentence in sentences:
+                sentence = sentence.strip()
+                if sentence and not sentence[0].isupper():
                     errors.append({
                         'error': 'Sentence should start with capital letter',
                         'context': sentence[:50],
@@ -268,7 +284,7 @@ class SpeechAnalyzer:
         
         return {
             'count': len(errors),
-            'details': errors
+            'details': errors[:10]  # Limit to top 10 errors
         }
     
     def _analyze_speech_pace(self, words: List[Dict]) -> Dict:

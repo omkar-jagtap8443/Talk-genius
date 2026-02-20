@@ -86,85 +86,88 @@ console.log('✅ Error handlers installed');
         </div>
 
         <div class="recording-interface">
-            <!-- Camera Preview - BIG AND PROMINENT -->
-            <div class="camera-container">
-                <video id="cameraPreview" autoplay muted playsinline></video>
-                <canvas id="overlayCanvas"></canvas>
-                
-                <!-- Recording Controls -->
-                <div class="recording-controls">
-                    <button id="startRecordingBtn" class="btn btn-record" onclick="startRecording()" title="Start Recording">
-                        <i class="fas fa-circle"></i>
-                        <span>Start</span>
-                    </button>
-                    <button id="stopRecordingBtn" class="btn btn-stop" onclick="stopRecording()" disabled title="Stop Recording">
-                        <i class="fas fa-square"></i>
-                        <span>Stop</span>
-                    </button>
-                    <button class="btn btn-secondary" onclick="goBackToTopics()" title="Go Back">
-                        <i class="fas fa-arrow-left"></i>
-                        <span>Back</span>
-                    </button>
-                </div>
-            </div>
+            <div class="main-grid">
+                <!-- Left Column -->
+                <div class="left-column">
+                    <!-- Camera Preview -->
+                    <div class="camera-container">
+                        <video id="cameraPreview" autoplay muted playsinline></video>
+                        <canvas id="overlayCanvas"></canvas>
+                        
+                        <!-- Recording Controls -->
+                        <div class="recording-controls">
+                            <button id="startRecordingBtn" class="btn btn-record" onclick="startRecording()" title="Start Recording">
+                                <i class="fas fa-circle"></i>
+                                <span>Start</span>
+                            </button>
+                            <button id="stopRecordingBtn" class="btn btn-stop" onclick="stopRecording()" disabled title="Stop Recording">
+                                <i class="fas fa-square"></i>
+                                <span>Stop</span>
+                            </button>
+                            <button class="btn btn-secondary" onclick="goBackToTopics()" title="Go Back">
+                                <i class="fas fa-arrow-left"></i>
+                                <span>Back</span>
+                            </button>
+                        </div>
+                    </div>
 
-            <!-- Real-time Feedback Panel -->
-            <div class="feedback-panel">
-                <h3>📊 Live Feedback</h3>
-                
-                <div class="metrics-grid">
-                    <div class="metric-card">
-                        <div class="metric-header">
-                            <i class="fas fa-user-tie"></i>
-                            <span>Posture</span>
+                    <!-- Suggestions and Transcript Below Video -->
+                    <div class="suggestions-panel">
+                        <h4>💡 AI Suggestions</h4>
+                        <div id="liveSuggestions" class="suggestions-list">
+                            <div class="suggestion-item">
+                                🎤 Start speaking to get real-time feedback...
+                            </div>
                         </div>
-                        <div id="postureScore" class="metric-value">--%</div>
-                        <div id="postureFeedback" class="metric-feedback">Ready to analyze...</div>
                     </div>
-                    
-                    <div class="metric-card">
-                        <div class="metric-header">
-                            <i class="fas fa-eye"></i>
-                            <span>Eye Contact</span>
-                        </div>
-                        <div id="eyeContactScore" class="metric-value">--%</div>
-                        <div id="eyeContactFeedback" class="metric-feedback">Ready to analyze...</div>
-                    </div>
-                    
-                    <div class="metric-card">
-                        <div class="metric-header">
-                            <i class="fas fa-wave-square"></i>
-                            <span>Speaking Pace</span>
-                        </div>
-                        <div id="paceValue" class="metric-value">-- WPM</div>
-                        <div id="paceFeedback" class="metric-feedback">Ready to analyze...</div>
-                    </div>
-                    
-                    <div class="metric-card">
-                        <div class="metric-header">
-                            <i class="fas fa-comment-dots"></i>
-                            <span>Filler Words</span>
-                        </div>
-                        <div id="fillerCount" class="metric-value">0</div>
-                        <div id="fillerFeedback" class="metric-feedback">No filler words detected</div>
-                    </div>
-                </div>
 
-                <!-- Live Suggestions -->
-                <div class="suggestions-panel">
-                    <h4>💡 AI Suggestions</h4>
-                    <div id="liveSuggestions" class="suggestions-list">
-                        <div class="suggestion-item">
-                            🎤 Start speaking to get real-time feedback...
+                    <div class="transcript-panel">
+                        <h4>📝 Live Transcript</h4>
+                        <div id="liveTranscript" class="transcript-content">
+                            Your speech will appear here as you speak...
                         </div>
                     </div>
                 </div>
 
-                <!-- Live Transcript -->
-                <div class="transcript-panel">
-                    <h4>📝 Live Transcript</h4>
-                    <div id="liveTranscript" class="transcript-content">
-                        Your speech will appear here as you speak...
+                <!-- Right Column - Metrics Cards -->
+                <div class="metrics-sidebar">
+                    <h3>📊 Live Feedback</h3>
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-header">
+                                <i class="fas fa-user-tie"></i>
+                                <span>Posture</span>
+                            </div>
+                            <div id="postureScore" class="metric-value">--%</div>
+                            <div id="postureFeedback" class="metric-feedback">Ready to analyze...</div>
+                        </div>
+                        
+                        <div class="metric-card">
+                            <div class="metric-header">
+                                <i class="fas fa-eye"></i>
+                                <span>Eye Contact</span>
+                            </div>
+                            <div id="eyeContactScore" class="metric-value">--%</div>
+                            <div id="eyeContactFeedback" class="metric-feedback">Ready to analyze...</div>
+                        </div>
+                        
+                        <div class="metric-card">
+                            <div class="metric-header">
+                                <i class="fas fa-wave-square"></i>
+                                <span>Speaking Pace</span>
+                            </div>
+                            <div id="paceValue" class="metric-value">-- WPM</div>
+                            <div id="paceFeedback" class="metric-feedback">Ready to analyze...</div>
+                        </div>
+                        
+                        <div class="metric-card">
+                            <div class="metric-header">
+                                <i class="fas fa-comment-dots"></i>
+                                <span>Filler Words</span>
+                            </div>
+                            <div id="fillerCount" class="metric-value">0</div>
+                            <div id="fillerFeedback" class="metric-feedback">No filler words detected</div>
+                        </div>
                     </div>
                 </div>
             </div>

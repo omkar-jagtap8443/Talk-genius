@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class GeminiClient:
     def __init__(self):
         self.api_key = Config.GEMINI_API_KEY
-        self.model_name = "gemini-1.5-flash-latest"
+        self.model_name = "gemini-2.5-flash"
         self.model = None
         self._initialize_client()
     
@@ -33,15 +33,18 @@ class GeminiClient:
     def generate_feedback(self, report_data: Dict) -> Dict:
         """Generate comprehensive feedback using Gemini"""
         if not self.model:
+            logger.warning("Gemini model not initialized, using fallback")
             return self._get_fallback_feedback(report_data)
         
         try:
             prompt = self._create_feedback_prompt(report_data)
+            logger.info("Calling Gemini API for feedback generation...")
             response = self._call_gemini_api(prompt)
+            logger.info(f"Gemini API response received: {response[:200]}...")
             return self._parse_feedback_response(response, report_data)
             
         except Exception as e:
-            logger.error(f"Gemini feedback generation failed: {str(e)}")
+            logger.error(f"Gemini feedback generation failed: {str(e)}", exc_info=True)
             return self._get_fallback_feedback(report_data)
     
     def _create_feedback_prompt(self, report_data: Dict) -> str:
@@ -65,76 +68,62 @@ class GeminiClient:
         transcript = speech_analysis.get('transcript', '')[:2000]  # Limit transcript length
         
         prompt = f"""
-        As an expert speech coach, provide comprehensive, actionable feedback for this practice session.
+You are an expert speech coach providing personalized feedback. Analyze this presentation and respond ONLY with valid JSON.
 
-        TOPIC: "{topic}"
-        DURATION: {speech_metrics['duration']} seconds
-        WORD COUNT: {speech_metrics['word_count']} words
+PERFORMANCE DATA:
+- Topic: "{topic}"
+- Overall Score: {overall_score.get('total', 0)}/100
+- Duration: {speech_metrics['duration']} seconds
+- Words Per Minute: {speech_metrics['wpm']} (ideal: 140-160)
+- Filler Words: {speech_metrics['filler_words']}
+- Posture Score: {posture_summary.get('average_posture_score', 0)}%
+- Eye Contact Score: {posture_summary.get('average_eye_contact_score', 0)}%
 
-        PERFORMANCE METRICS:
-        - Overall Score: {overall_score.get('total', 0)}/100
-        - Words Per Minute: {speech_metrics['wpm']} (Ideal: 140-160)
-        - Filler Words: {speech_metrics['filler_words']}
-        - Pauses: {speech_metrics['pauses']}
-        - Grammar Errors: {speech_metrics['grammar_errors']}
-        - Posture Score: {posture_summary.get('average_posture_score', 0)}%
-        - Eye Contact Score: {posture_summary.get('average_eye_contact_score', 0)}%
+Transcript excerpt: "{transcript[:500]}"
 
-        POSTURE BREAKDOWN:
-        - Good Posture: {posture_summary.get('posture_breakdown', {}).get('good_percentage', 0)}%
-        - Okay Posture: {posture_summary.get('posture_breakdown', {}).get('okay_percentage', 0)}%
-        - Poor Posture: {posture_summary.get('posture_breakdown', {}).get('bad_percentage', 0)}%
-
-        EYE CONTACT BREAKDOWN:
-        - Good Eye Contact: {posture_summary.get('eye_contact_breakdown', {}).get('good_percentage', 0)}%
-        - Moderate Eye Contact: {posture_summary.get('eye_contact_breakdown', {}).get('moderate_percentage', 0)}%
-        - Poor Eye Contact: {posture_summary.get('eye_contact_breakdown', {}).get('poor_percentage', 0)}%
-
-        TRANSCRIPT (excerpt):
-        "{transcript}"
-
-        Please provide feedback in this exact JSON format:
-        {{
-            "overall_assessment": "Brief overall assessment (2-3 sentences)",
-            "strengths": [
-                "3 specific strengths based on the data",
-                "Focus on what was done well",
-                "Be specific and encouraging"
-            ],
-            "areas_for_improvement": [
-                "3 specific areas needing improvement",
-                "Provide actionable advice",
-                "Be constructive, not critical"
-            ],
-            "personalized_exercises": [
-                "2 personalized practice exercises",
-                "Make them relevant to the weaknesses identified",
-                "Include time estimates if possible"
-            ],
-            "delivery_tips": [
-                "2 specific delivery improvement tips",
-                "Focus on immediate improvements",
-                "Make them easy to implement"
-            ],
-            "topic_relevance_feedback": "Specific feedback on how well they addressed the topic",
-            "confidence_rating": 8,
-            "next_steps": "What to focus on in the next practice session"
-        }}
-
-        Guidelines:
-        - Be specific and data-driven
-        - Focus on actionable advice
-        - Balance positive reinforcement with constructive criticism
-        - Consider the topic and context
-        - Make exercises practical and time-bound
-        """
+Respond with ONLY this JSON structure (no markdown, no code blocks):
+{{
+  "overall_assessment": "2-3 sentence assessment of the performance",
+  "strengths": [
+    "First specific strength based on the data",
+    "Second specific strength",
+    "Third specific strength"
+  ],
+  "areas_for_improvement": [
+    "First actionable improvement area",
+    "Second actionable improvement area",
+    "Third actionable improvement area"
+  ],
+  "personalized_exercises": [
+    "First personalized exercise with time estimate",
+    "Second personalized exercise"
+  ],
+  "delivery_tips": [
+    "First practical delivery tip",
+    "Second practical delivery tip"
+  ],
+  "topic_relevance_feedback": "How well they addressed the topic",
+  "confidence_rating": 7,
+  "next_steps": "What to focus on next"
+}}
+"""
         
         return prompt
     
     def _call_gemini_api(self, prompt: str) -> str:
         """Call Gemini API with the given prompt"""
         try:
-            response = self.model.generate_content(prompt)
+            generation_config = {
+                "temperature": 0.7,
+                "top_p": 0.95,
+                "top_k": 40,
+                "max_output_tokens": 2048,
+            }
+            
+            response = self.model.generate_content(
+                prompt,
+                generation_config=generation_config
+            )
             return response.text.strip()
             
         except Exception as e:
@@ -144,45 +133,34 @@ class GeminiClient:
     def _parse_feedback_response(self, response: str, report_data: Dict) -> Dict:
         """Parse Gemini response into structured feedback"""
         try:
-            # Try to extract JSON from response
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            # Try to extract JSON from response (handle markdown code blocks)
+            json_match = re.search(r'```(?:json)?\s*({.*?})\s*```', response, re.DOTALL)
+            if not json_match:
+                json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            
             if json_match:
-                parsed_feedback = json.loads(json_match.group())
+                json_str = json_match.group(1) if json_match.lastindex else json_match.group()
+                parsed_feedback = json.loads(json_str)
                 
                 # Validate required fields
                 required_fields = ['strengths', 'areas_for_improvement', 'personalized_exercises']
                 if all(field in parsed_feedback for field in required_fields):
-                    return self._enhance_feedback_with_markdown(parsed_feedback)
+                    logger.info("Successfully parsed AI-generated feedback")
+                    return parsed_feedback  # Return as-is, no markdown conversion needed
+                else:
+                    logger.warning(f"Missing required fields in response. Found: {list(parsed_feedback.keys())}")
+            else:
+                logger.warning("No JSON found in Gemini response")
             
             # If JSON parsing fails, use fallback
             logger.warning("Failed to parse Gemini response as JSON, using fallback")
             return self._get_fallback_feedback(report_data)
             
         except json.JSONDecodeError as e:
-            logger.error(f"JSON parsing failed: {str(e)}")
+            logger.error(f"JSON parsing failed: {str(e)}. Response: {response[:500]}")
             return self._get_fallback_feedback(report_data)
     
-    def _enhance_feedback_with_markdown(self, feedback: Dict) -> Dict:
-        """Convert feedback to HTML with markdown formatting"""
-        html_feedback = {}
-        
-        for key, value in feedback.items():
-            if isinstance(value, str):
-                # Convert markdown to HTML
-                html_feedback[key] = markdown.markdown(value)
-            elif isinstance(value, list):
-                # Convert list items to HTML
-                html_items = []
-                for item in value:
-                    if isinstance(item, str):
-                        html_items.append(markdown.markdown(f"- {item}"))
-                    else:
-                        html_items.append(str(item))
-                html_feedback[key] = "\n".join(html_items)
-            else:
-                html_feedback[key] = value
-        
-        return html_feedback
+
     
     def _get_fallback_feedback(self, report_data: Dict) -> Dict:
         """Generate fallback feedback when Gemini is unavailable"""

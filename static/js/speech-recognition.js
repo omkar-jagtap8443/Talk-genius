@@ -51,6 +51,11 @@ class LiveTranscription {
             
             // Update UI with transcript
             this.updateTranscriptDisplay();
+            
+            // Trigger metrics update
+            if (window.practiceSession) {
+                window.practiceSession.updateLiveMetrics();
+            }
         };
         
         this.recognition.onerror = (event) => {
@@ -60,6 +65,17 @@ class LiveTranscription {
         this.recognition.onend = () => {
             this.isListening = false;
             console.log('Speech recognition ended');
+            
+            // Auto-restart if still recording
+            if (window.practiceSession && window.practiceSession.isRecording) {
+                setTimeout(() => {
+                    try {
+                        this.recognition.start();
+                    } catch (e) {
+                        console.warn('Could not restart recognition:', e);
+                    }
+                }, 100);
+            }
         };
     }
     

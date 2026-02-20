@@ -113,10 +113,12 @@ class PracticeSession {
                 });
 
                 this.pose.setOptions({
-                    modelComplexity: 1,
+                    modelComplexity: 2,
                     smoothLandmarks: true,
-                    minDetectionConfidence: 0.5,
-                    minTrackingConfidence: 0.5
+                    enableSegmentation: true,
+                    smoothSegmentation: true,
+                    minDetectionConfidence: 0.7,
+                    minTrackingConfidence: 0.7
                 });
 
                 this.pose.onResults((results) => this.onPoseResults(results));
@@ -148,13 +150,19 @@ class PracticeSession {
         if (!this.isRecording || !this.ctx) return;
 
         try {
+            this.ctx.save();
             this.ctx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
 
             if (results.poseLandmarks) {
+                // Draw pose landmarks
+                drawConnectors(this.ctx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
+                drawLandmarks(this.ctx, results.poseLandmarks, {color: '#FF0000', lineWidth: 1, radius: 3});
+                
                 const postureScore = this.analyzePosture(results.poseLandmarks);
                 this.postureData.push({ timestamp: this.recordingTime, score: postureScore });
                 this.updatePostureFeedback(postureScore);
             }
+            this.ctx.restore();
         } catch (error) {
             console.warn('Pose processing error:', error);
         }
@@ -175,19 +183,48 @@ class PracticeSession {
     }
 
     analyzePosture(landmarks) {
-        if (!landmarks || landmarks.length < 25) return 50;
+        if (!landmarks || landmarks.length < 33) return 50;
         
         const leftShoulder = landmarks[11];
         const rightShoulder = landmarks[12];
         const leftHip = landmarks[23];
         const rightHip = landmarks[24];
+        const leftEar = landmarks[7];
+        const rightEar = landmarks[8];
+        const nose = landmarks[0];
         
-        if (!leftShoulder || !rightShoulder) return 50;
+        if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) return 50;
 
-        const shoulderDiff = Math.abs(leftShoulder.y - rightShoulder.y);
-        const hipDiff = Math.abs(leftHip.y - rightHip.y);
+        let score = 100;
         
-        let score = 100 - (shoulderDiff * 200 + hipDiff * 200);
+        // Shoulder alignment (horizontal)
+        const shoulderDiff = Math.abs(leftShoulder.y - rightShoulder.y);
+        score -= shoulderDiff * 150;
+        
+        // Hip alignment
+        const hipDiff = Math.abs(leftHip.y - rightHip.y);
+        score -= hipDiff * 150;
+        
+        // Spine alignment (vertical posture)
+        const shoulderMidX = (leftShoulder.x + rightShoulder.x) / 2;
+        const hipMidX = (leftHip.x + rightHip.x) / 2;
+        const spineDeviation = Math.abs(shoulderMidX - hipMidX);
+        score -= spineDeviation * 100;
+        
+        // Head position (forward head posture check)
+        if (leftEar && rightEar) {
+            const earMidX = (leftEar.x + rightEar.x) / 2;
+            const headForward = Math.abs(earMidX - shoulderMidX);
+            score -= headForward * 80;
+        }
+        
+        // Shoulder slouch check (depth)
+        if (leftShoulder.z && rightShoulder.z && leftHip.z && rightHip.z) {
+            const shoulderDepth = Math.abs(leftShoulder.z - rightShoulder.z);
+            const hipDepth = Math.abs(leftHip.z - rightHip.z);
+            score -= (shoulderDepth + hipDepth) * 50;
+        }
+        
         return Math.max(0, Math.min(100, Math.round(score)));
     }
 
@@ -255,7 +292,10 @@ class PracticeSession {
                 if (window.LiveTranscription) {
                     this.liveTranscription = new LiveTranscription();
                     this.liveTranscription.start();
+                    window.practiceSession = this;
                     console.log('🎤 Transcription started');
+                } else {
+                    console.warn('⚠️ LiveTranscription not available');
                 }
                 
                 this.updateRecordingUI(true);
@@ -348,8 +388,10 @@ class PracticeSession {
 
     startRealTimeFeedback() {
         this.feedbackInterval = setInterval(() => {
-            this.updateLiveMetrics();
-        }, 1000);
+            if (this.liveTranscription) {
+                this.updateLiveMetrics();
+            }
+        }, 2000);
     }
 
     updateLiveMetrics() {
@@ -358,13 +400,16 @@ class PracticeSession {
         // Update speech metrics from live transcription
         if (this.liveTranscription) {
             const currentTranscript = this.liveTranscription.getFullTranscript();
+            console.log('Current transcript:', currentTranscript);
             
             // Calculate WPM (words per minute)
             const wpm = this.calculateWPM(currentTranscript);
+            console.log('WPM:', wpm);
             this.updatePaceFeedback(wpm);
             
             // Count filler words
             const fillerCount = this.countFillerWords(currentTranscript);
+            console.log('Filler count:', fillerCount);
             this.updateFillerFeedback(fillerCount);
             
             // Update transcript display
@@ -373,6 +418,8 @@ class PracticeSession {
             // Generate live suggestions based on metrics
             const suggestions = this.generateLiveSuggestions(wpm, fillerCount);
             this.updateSuggestions(suggestions);
+        } else {
+            console.log('No live transcription available');
         }
 
         // Update posture and eye contact metrics
@@ -396,18 +443,28 @@ class PracticeSession {
     }
 
     countFillerWords(transcript) {
-        if (!transcript) return 0;
+        if (!transcript || transcript.trim().length === 0) {
+            console.log('No transcript to analyze');
+            return 0;
+        }
         
-        const fillerWords = ['um', 'uh', 'like', 'you know', 'actually', 'basically', 'literally', 'sort of', 'kind of', 'i mean', 'right', 'so'];
+        const fillerWords = ['um', 'uh', 'uhm', 'like', 'you know', 'actually', 'basically', 'literally', 'sort of', 'kind of', 'i mean', 'right', 'so', 'well', 'okay', 'ah', 'er', 'hmm'];
         const lowerTranscript = transcript.toLowerCase();
+        console.log('Analyzing transcript:', lowerTranscript);
         
         let count = 0;
         for (let filler of fillerWords) {
-            const regex = new RegExp(`\\b${filler}\\b`, 'gi');
+            // Escape special regex characters and use word boundaries
+            const escapedFiller = filler.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp('(^|\\s)' + escapedFiller + '(\\s|$|[,.])', 'gi');
             const matches = lowerTranscript.match(regex);
-            if (matches) count += matches.length;
+            if (matches) {
+                count += matches.length;
+                console.log(`Found ${matches.length} "${filler}"`, matches);
+            }
         }
         
+        console.log(`Total filler words: ${count}`);
         return count;
     }
 

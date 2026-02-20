@@ -13,19 +13,27 @@ class VideoProcessor:
         self.supported_formats = ['.webm', '.mp4', '.avi', '.mov']
     
     def convert_to_mp4(self, input_path: str, output_path: Optional[str] = None) -> str:
-        """Convert video to MP4 format - simplified without FFmpeg"""
+        """Convert video to MP4 format using FFmpeg"""
+        import subprocess
         try:
             if not output_path:
                 output_path = input_path.replace('.webm', '.mp4').replace('.avi', '.mp4')
             
-            logger.info(f"Video conversion skipped (FFmpeg not available): {input_path}")
-            
-            # For now, just return the original path
             if input_path.endswith('.mp4'):
                 return input_path
-            else:
-                logger.warning("FFmpeg not available - video conversion skipped")
-                return input_path
+            
+            logger.info(f"Converting video: {input_path} -> {output_path}")
+            
+            cmd = [
+                'ffmpeg', '-i', input_path,
+                '-c:v', 'libx264',
+                '-c:a', 'aac',
+                '-y', output_path
+            ]
+            subprocess.run(cmd, check=True, capture_output=True)
+            
+            logger.info(f"Video converted successfully: {output_path}")
+            return output_path
             
         except Exception as e:
             logger.error(f"Video conversion error: {str(e)}")

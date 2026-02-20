@@ -389,9 +389,8 @@ def serve_video(session_id):
 def serve_latest_video():
     """Serve latest recorded video"""
     try:
-        report = supabase_manager.get_latest_report()
-        
-        if not report:
+        videos = [f for f in os.listdir(app.config['VIDEOS_FOLDER']) if f.endswith('.mp4')]
+        if not videos:
             return jsonify({'error': 'No videos found'}), 404
         
         session_id = report['session_id']
