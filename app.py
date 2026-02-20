@@ -5,8 +5,13 @@ import os
 import time
 import json
 import uuid
+import tempfile
 from datetime import datetime
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Import custom utilities
 from utils.video_processor import VideoProcessor
@@ -16,6 +21,7 @@ from utils.speech_analyzer import SpeechAnalyzer
 from utils.gemini_client import GeminiClient
 from utils.deepgram_client import DeepgramClient
 from utils.file_processor import FileProcessor
+from utils.supabase_storage import supabase_manager
 from services.realtime_feedback import RealtimeFeedback
 from services.scoring_engine import ScoringEngine
 from services.topic_extractor import TopicExtractor
@@ -25,28 +31,23 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = 'talkgenius-practice-mirror-secret-key-2024'
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'talkgenius-practice-mirror-secret-key-2024')
 CORS(app)
 
 # Configuration
-app.config.update(
-    UPLOAD_FOLDER='data/uploads',
-    VIDEOS_FOLDER='data/videos',
-    AUDIO_FOLDER='data/audio',
-    TRANSCRIPTS_FOLDER='data/transcripts',
-    POSTURE_FOLDER='data/posture',
-    ANALYSIS_FOLDER='data/analysis',
-    REPORTS_FOLDER='data/reports',
-    LLM_FOLDER='data/llm',
-    MAX_CONTENT_LENGTH=100 * 1024 * 1024  # 100MB max file size
-)
+STORAGE_FOLDERS = {
+    'UPLOAD_FOLDER': 'uploads',
+    'VIDEOS_FOLDER': 'videos',
+    'AUDIO_FOLDER': 'audio',
+    'TRANSCRIPTS_FOLDER': 'transcripts',
+    'POSTURE_FOLDER': 'posture',
+    'ANALYSIS_FOLDER': 'analysis',
+    'REPORTS_FOLDER': 'reports',
+    'LLM_FOLDER': 'llm'
+}
 
-# Create directories
-for folder in [app.config[key] for key in [
-    'UPLOAD_FOLDER', 'VIDEOS_FOLDER', 'AUDIO_FOLDER', 'TRANSCRIPTS_FOLDER',
-    'POSTURE_FOLDER', 'ANALYSIS_FOLDER', 'REPORTS_FOLDER', 'LLM_FOLDER'
-]]:
-    os.makedirs(folder, exist_ok=True)
+app.config.update(STORAGE_FOLDERS)
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
 # Initialize services
 video_processor = VideoProcessor()
@@ -92,6 +93,11 @@ def upload_topic():
             keywords = topic_extractor.extract_keywords(topic_text)
             session['topic_keywords'] = keywords
             
+            # Save session to Supabase
+            supabase_manager.create_session(
+                session_id, topic_text, 'text', keywords
+            )
+            
             return jsonify({
                 'success': True,
                 'session_id': session_id,
@@ -105,17 +111,14 @@ def upload_topic():
             if file.filename == '':
                 return jsonify({'success': False, 'error': 'No file selected'})
             
-            # Save uploaded file
             file_ext = os.path.splitext(file.filename)[1].lower()
             filename = f"{session_id}{file_ext}"
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
             
             # Extract content and topics
             if file_ext in ['.ppt', '.pptx']:
-                content = file_processor.extract_ppt_content(filepath)
+                content = file_processor.extract_ppt_content(file)
             elif file_ext == '.pdf':
-                content = file_processor.extract_pdf_content(filepath)
+                content = file_processor.extract_pdf_content(file)
             else:
                 return jsonify({'success': False, 'error': 'Unsupported file format'})
             
@@ -126,6 +129,20 @@ def upload_topic():
             session['topic_type'] = 'file'
             session['topic_keywords'] = topic_data['keywords']
             session['file_content'] = content
+            
+            # Save session and file to Supabase
+            supabase_manager.create_session(
+                session_id,
+                topic_data['main_topic'],
+                'file',
+                topic_data['keywords'],
+                content
+            )
+            supabase_manager.save_file(
+                app.config['UPLOAD_FOLDER'],
+                filename,
+                file.read()
+            )
             
             return jsonify({
                 'success': True,
@@ -212,21 +229,40 @@ def save_recording():
         if not session_id:
             return jsonify({'success': False, 'error': 'No active session'})
         
-        # Get data from request
         video_blob = request.files.get('video')
         posture_data = request.form.get('posture_data')
-        audio_data = request.files.get('audio')
         
         if not video_blob:
             return jsonify({'success': False, 'error': 'No video data'})
         
-        # Save video file
-        video_filename = f"{session_id}.webm"
-        video_path = os.path.join(app.config['VIDEOS_FOLDER'], video_filename)
-        video_blob.save(video_path)
+        # Read video bytes
+        video_bytes = video_blob.read()
         
-        # Convert to MP4
-        mp4_path = video_processor.convert_to_mp4(video_path)
+        # Save WebM to Supabase storage
+        video_filename = f"{session_id}.webm"
+        supabase_manager.save_file(
+            app.config['VIDEOS_FOLDER'],
+            video_filename,
+            video_bytes
+        )
+        
+        # Convert to MP4 (requires temp file)
+        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as tmp_file:
+            tmp_file.write(video_bytes)
+            tmp_webm_path = tmp_file.name
+        
+        mp4_path = video_processor.convert_to_mp4(tmp_webm_path)
+        mp4_filename = f"{session_id}.mp4"
+        
+        # Read MP4 file and upload
+        with open(mp4_path, 'rb') as f:
+            mp4_bytes = f.read()
+        
+        supabase_manager.save_file(
+            app.config['VIDEOS_FOLDER'],
+            mp4_filename,
+            mp4_bytes
+        )
         
         # Extract audio
         audio_path = audio_processor.extract_audio(mp4_path)
@@ -236,34 +272,25 @@ def save_recording():
         if posture_data:
             try:
                 posture_raw = json.loads(posture_data)
-                logger.info(f"Raw posture data received: {len(posture_raw.get('posture', []))} posture points, {len(posture_raw.get('eye_contact', []))} eye contact points")
+                logger.info(f"Raw posture data: {len(posture_raw.get('posture', []))} points")
                 posture_analysis = posture_analyzer.process_posture_data(posture_raw)
-                logger.info(f"Processed posture analysis: {posture_analysis}")
-                posture_filename = f"{session_id}.json"
-                posture_filepath = os.path.join(app.config['POSTURE_FOLDER'], posture_filename)
-                with open(posture_filepath, 'w') as f:
-                    json.dump(posture_analysis, f, indent=2)
+                
+                # Save to Supabase database
+                supabase_manager.save_posture_analysis(session_id, posture_analysis)
             except Exception as e:
                 logger.error(f"Error processing posture data: {str(e)}")
                 posture_analysis = posture_analyzer._get_empty_analysis()
         else:
-            # Provide default posture analysis if no data available
             logger.warning("No posture data provided")
             posture_analysis = posture_analyzer._get_empty_analysis()
         
         # Transcribe audio
         transcript = deepgram_client.transcribe_audio(audio_path)
-        transcript_filename = f"{session_id}.json"
-        transcript_filepath = os.path.join(app.config['TRANSCRIPTS_FOLDER'], transcript_filename)
-        with open(transcript_filepath, 'w') as f:
-            json.dump(transcript, f, indent=2)
+        supabase_manager.save_transcript(session_id, transcript)
         
         # Analyze speech
         speech_analysis = speech_analyzer.analyze_transcript(transcript)
-        analysis_filename = f"{session_id}.json"
-        analysis_filepath = os.path.join(app.config['ANALYSIS_FOLDER'], analysis_filename)
-        with open(analysis_filepath, 'w') as f:
-            json.dump(speech_analysis, f, indent=2)
+        supabase_manager.save_speech_analysis(session_id, speech_analysis)
         
         # Generate comprehensive report
         report_data = {
@@ -285,23 +312,34 @@ def save_recording():
         )
         report_data['overall_score'] = overall_score
         
-        # Save report
-        report_filename = f"{session_id}.json"
-        report_filepath = os.path.join(app.config['REPORTS_FOLDER'], report_filename)
-        with open(report_filepath, 'w') as f:
-            json.dump(report_data, f, indent=2)
-        
-        # Generate AI feedback using Gemini
+        # Generate AI feedback
         ai_feedback = gemini_client.generate_feedback(report_data)
-        llm_filename = f"{session_id}.json"
-        llm_filepath = os.path.join(app.config['LLM_FOLDER'], llm_filename)
-        with open(llm_filepath, 'w') as f:
-            json.dump(ai_feedback, f, indent=2)
+        logger.info(f"Generated AI feedback - type: {type(ai_feedback)}")
         
-        # Update report with AI feedback
-        report_data['ai_feedback'] = ai_feedback
-        with open(report_filepath, 'w') as f:
-            json.dump(report_data, f, indent=2)
+        # Log before saving
+        logger.info(f"Saving to database - report_data keys: {list(report_data.keys())}")
+        logger.info(f"Saving to database - overall_score: {overall_score}")
+        
+        # Save report to Supabase database
+        save_success = supabase_manager.save_report(
+            session_id,
+            report_data,
+            overall_score,
+            ai_feedback
+        )
+        logger.info(f"Report save success: {save_success}")
+        
+        # Also save files to storage for direct access
+        supabase_manager.save_file(
+            app.config['REPORTS_FOLDER'],
+            f"{session_id}.json",
+            report_data
+        )
+        supabase_manager.save_file(
+            app.config['LLM_FOLDER'],
+            f"{session_id}.json",
+            ai_feedback
+        )
         
         return jsonify({
             'success': True,
@@ -318,17 +356,14 @@ def save_recording():
 def get_report(session_id):
     """Get analysis report for a session"""
     try:
-        report_path = os.path.join(app.config['REPORTS_FOLDER'], f"{session_id}.json")
+        report = supabase_manager.get_report(session_id)
         
-        if not os.path.exists(report_path):
+        if not report:
             return jsonify({'success': False, 'error': 'Report not found'})
-        
-        with open(report_path, 'r') as f:
-            report_data = json.load(f)
         
         return jsonify({
             'success': True,
-            'report': report_data
+            'report': report
         })
         
     except Exception as e:
@@ -339,24 +374,35 @@ def get_report(session_id):
 def serve_video(session_id):
     """Serve recorded video by session ID"""
     try:
-        return send_from_directory(app.config['VIDEOS_FOLDER'], f"{session_id}.mp4")
-    except FileNotFoundError:
+        file_url = supabase_manager.get_file_url(
+            app.config['VIDEOS_FOLDER'],
+            f"{session_id}.mp4"
+        )
+        if file_url:
+            return jsonify({'success': True, 'url': file_url})
+        return jsonify({'error': 'Video not found'}), 404
+    except Exception as e:
+        logger.error(f"Error serving video: {str(e)}")
         return jsonify({'error': 'Video not found'}), 404
 
 @app.route('/video')
 def serve_latest_video():
-    """Serve latest recorded video (for playback page)"""
+    """Serve latest recorded video"""
     try:
-        videos = os.listdir(app.config['VIDEOS_FOLDER'])
-        if not videos:
+        report = supabase_manager.get_latest_report()
+        
+        if not report:
             return jsonify({'error': 'No videos found'}), 404
         
-        # Get the most recent video file
-        latest_video = max(videos, key=lambda x: os.path.getctime(
-            os.path.join(app.config['VIDEOS_FOLDER'], x)
-        ))
+        session_id = report['session_id']
+        file_url = supabase_manager.get_file_url(
+            app.config['VIDEOS_FOLDER'],
+            f"{session_id}.mp4"
+        )
         
-        return send_from_directory(app.config['VIDEOS_FOLDER'], latest_video)
+        if file_url:
+            return jsonify({'success': True, 'url': file_url})
+        return jsonify({'error': 'Video not found'}), 404
         
     except Exception as e:
         logger.error(f"Error serving video: {str(e)}")
@@ -364,118 +410,185 @@ def serve_latest_video():
 
 @app.route('/report')
 def serve_latest_report():
-    """Serve latest report (for playback page)"""
+    """Serve latest report"""
     try:
-        reports = os.listdir(app.config['REPORTS_FOLDER'])
-        if not reports:
-            return jsonify({'error': 'No reports found', 'message': 'Please complete a practice session first'}), 404
+        report = supabase_manager.get_latest_report()
+        logger.info(f"Latest report retrieved: {report is not None}")
         
-        latest_report = max(reports, key=lambda x: os.path.getctime(
-            os.path.join(app.config['REPORTS_FOLDER'], x)
-        ))
+        if not report:
+            logger.warning("No report found in database")
+            return jsonify({
+                'error': 'No reports found',
+                'message': 'Please complete a practice session first'
+            }), 404
         
-        with open(os.path.join(app.config['REPORTS_FOLDER'], latest_report), 'r') as f:
-            report_data = json.load(f)
+        # Extract report data from the database record
+        report_data = report.get('report_data', report)
+        logger.info(f"Report data keys: {report_data.keys() if isinstance(report_data, dict) else 'Not a dict'}")
         
         return jsonify(report_data)
         
     except Exception as e:
-        logger.error(f"Error serving report: {str(e)}")
-        return jsonify({'error': str(e), 'message': 'Failed to load report data'}), 500
+        logger.error(f"Error serving report: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': str(e),
+            'message': 'Failed to load report data'
+        }), 500
 
 @app.route('/transcript')
 def serve_latest_transcript():
     """Serve latest transcript"""
     try:
-        transcripts = os.listdir(app.config['TRANSCRIPTS_FOLDER'])
-        if not transcripts:
-            return jsonify({'error': 'No transcripts found', 'message': 'Please complete a practice session first'}), 404
+        report = supabase_manager.get_latest_report()
+        logger.info(f"Retrieving transcript from report: {report is not None}")
         
-        latest_transcript = max(transcripts, key=lambda x: os.path.getctime(
-            os.path.join(app.config['TRANSCRIPTS_FOLDER'], x)
-        ))
+        if not report:
+            logger.warning("No report found for transcript")
+            return jsonify({
+                'error': 'No transcripts found',
+                'message': 'Please complete a practice session first'
+            }), 404
         
-        with open(os.path.join(app.config['TRANSCRIPTS_FOLDER'], latest_transcript), 'r') as f:
-            transcript_data = json.load(f)
+        # First try to get from report_data
+        report_data = report.get('report_data')
+        if report_data and isinstance(report_data, dict):
+            transcript = report_data.get('transcript')
+            if transcript:
+                logger.info("Transcript found in report_data")
+                return jsonify(transcript)
         
-        return jsonify(transcript_data)
+        # Fall back to database query
+        session_id = report.get('session_id')
+        if session_id:
+            transcript = supabase_manager.get_transcript(session_id)
+            if transcript:
+                logger.info("Transcript found in database")
+                return jsonify(transcript)
+        
+        logger.warning(f"No transcript found for session {session_id}")
+        return jsonify({'error': 'Transcript not found'}), 404
         
     except Exception as e:
-        logger.error(f"Error serving transcript: {str(e)}")
-        return jsonify({'error': str(e), 'message': 'Failed to load transcript data'}), 500
+        logger.error(f"Error serving transcript: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': str(e),
+            'message': 'Failed to load transcript data'
+        }), 500
 
 @app.route('/analysis_data')
 def serve_latest_analysis():
     """Serve latest analysis"""
     try:
-        analyses = os.listdir(app.config['ANALYSIS_FOLDER'])
-        if not analyses:
-            return jsonify({'error': 'No analysis found', 'message': 'Please complete a practice session first'}), 404
+        report = supabase_manager.get_latest_report()
+        logger.info(f"Retrieving analysis from report: {report is not None}")
         
-        latest_analysis = max(analyses, key=lambda x: os.path.getctime(
-            os.path.join(app.config['ANALYSIS_FOLDER'], x)
-        ))
+        if not report:
+            logger.warning("No report found for analysis")
+            return jsonify({
+                'error': 'No analysis found',
+                'message': 'Please complete a practice session first'
+            }), 404
         
-        with open(os.path.join(app.config['ANALYSIS_FOLDER'], latest_analysis), 'r') as f:
-            analysis_data = json.load(f)
+        # First try to get from report_data
+        report_data = report.get('report_data')
+        if report_data and isinstance(report_data, dict):
+            analysis = report_data.get('speech_analysis')
+            if analysis:
+                logger.info("Speech analysis found in report_data")
+                return jsonify(analysis)
         
-        return jsonify(analysis_data)
+        # Fall back to database query
+        session_id = report.get('session_id')
+        if session_id:
+            analysis = supabase_manager.get_speech_analysis(session_id)
+            if analysis:
+                logger.info("Speech analysis found in database")
+                return jsonify(analysis)
+        
+        logger.warning(f"No analysis found for session {session_id}")
+        return jsonify({'error': 'Analysis not found'}), 404
         
     except Exception as e:
-        logger.error(f"Error serving analysis: {str(e)}")
-        return jsonify({'error': str(e), 'message': 'Failed to load analysis data'}), 500
+        logger.error(f"Error serving analysis: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': str(e),
+            'message': 'Failed to load analysis data'
+        }), 500
 
 @app.route('/llm_feedback')
 def serve_llm_feedback():
     """Serve LLM feedback"""
     try:
-        feedback_files = os.listdir(app.config['LLM_FOLDER'])
-        if not feedback_files:
-            return jsonify({'error': 'No LLM feedback found', 'message': 'Please complete a practice session first'}), 404
+        report = supabase_manager.get_latest_report()
         
-        latest_feedback = max(feedback_files, key=lambda x: os.path.getctime(
-            os.path.join(app.config['LLM_FOLDER'], x)
-        ))
+        if not report:
+            return jsonify({
+                'error': 'No LLM feedback found',
+                'message': 'Please complete a practice session first'
+            }), 404
         
-        with open(os.path.join(app.config['LLM_FOLDER'], latest_feedback), 'r') as f:
-            feedback_data = json.load(f)
+        ai_feedback = report.get('ai_feedback')
         
-        return jsonify(feedback_data)
+        if ai_feedback:
+            return jsonify(ai_feedback)
+        return jsonify({'error': 'AI feedback not found'}), 404
         
     except Exception as e:
         logger.error(f"Error serving LLM feedback: {str(e)}")
-        return jsonify({'error': str(e), 'message': 'Failed to load AI feedback'}), 500
+        return jsonify({
+            'error': str(e),
+            'message': 'Failed to load AI feedback'
+        }), 500
 
 @app.route('/session_history')
 def get_session_history():
     """Get user's practice session history"""
     try:
-        reports = []
-        for filename in os.listdir(app.config['REPORTS_FOLDER']):
-            if filename.endswith('.json'):
-                filepath = os.path.join(app.config['REPORTS_FOLDER'], filename)
-                with open(filepath, 'r') as f:
-                    report_data = json.load(f)
-                    reports.append({
-                        'session_id': report_data.get('session_id'),
-                        'timestamp': report_data.get('timestamp'),
-                        'topic': report_data.get('topic'),
-                        'overall_score': report_data.get('overall_score', {}).get('total', 0),
-                        'duration': report_data.get('speech_analysis', {}).get('duration_seconds', 0)
-                    })
-        
-        # Sort by timestamp (newest first)
-        reports.sort(key=lambda x: x['timestamp'], reverse=True)
+        sessions = supabase_manager.get_session_history(limit=50)
         
         return jsonify({
             'success': True,
-            'sessions': reports
+            'sessions': sessions
         })
         
     except Exception as e:
         logger.error(f"Error getting session history: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/debug/latest_report')
+def debug_latest_report():
+    """Debug endpoint to see what's stored"""
+    try:
+        report = supabase_manager.get_latest_report()
+        logger.info(f"DEBUG: Latest report: {report}")
+        
+        if not report:
+            return jsonify({'debug': 'No report found'})
+        
+        return jsonify({
+            'keys': list(report.keys()) if isinstance(report, dict) else 'Not a dict',
+            'report': report
+        })
+    except Exception as e:
+        logger.error(f"Debug error: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)})
+
+@app.route('/debug/all_reports')
+def debug_all_reports():
+    """Debug endpoint to see all reports"""
+    try:
+        from supabase import create_client
+        supabase = create_client(os.getenv('SUPABASE_URL'), os.getenv('SUPABASE_KEY'))
+        response = supabase.table('reports').select('*').order('created_at', desc=True).limit(5).execute()
+        
+        return jsonify({
+            'count': len(response.data) if response.data else 0,
+            'reports': response.data
+        })
+    except Exception as e:
+        logger.error(f"Debug error: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)})
+
 if __name__ == '__main__':
-    logger.info("Starting TalkGenius Practice Mirror...")
+    logger.info("Starting TalkGenius Practice Mirror with Supabase...")
     app.run(debug=True, host='0.0.0.0', port=5000)
